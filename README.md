@@ -100,9 +100,9 @@ sudo gunicorn -w 4 -b 0.0.0.0:8080 server:http_app
 
 ```bash
 sudo gunicorn -w 4 -b 0.0.0.0:8443 \
-    --certfile /etc/server-app/server/server.crt \
-    --keyfile /etc/server-app/server/server.key \
-    --ca-certs /etc/server-app/server/ca.crt \
+    --certfile /etc/admindb-server/server.crt \
+    --keyfile /etc/admindb-server/server.key \
+    --ca-certs /etc/admindb-server/ca.crt \
     --cert-reqs 2 \
     server:https_app
 ```
@@ -112,8 +112,8 @@ sudo gunicorn -w 4 -b 0.0.0.0:8443 \
 By default, the client points to `localhost` on ports `8080` and `8443`. You can override these defaults permanently by creating a configuration file.
 
 The client checks for configuration in this order:
-1. `/etc/server-app/config` (Global System Config)
-2. `~/.server-app/config` (User Config - overrides Global)
+1. `/etc/admindb-client/config` (Global System Config)
+2. `~/.admindb/config` (User Config - overrides Global)
 
 **Example Configuration Format:**
 ```ini
@@ -124,7 +124,7 @@ https_server = https://myserver.internal:8443
 
 ## Client Usage
 
-The `client.py` script provides a command-line interface to interact with the server. It stores its certificates in `~/.server-app/` (or `/etc/server-app/client/` if run as root), which can be overridden via the `--cert-dir` flag.
+The `dbcli` script provides a command-line interface to interact with the server. It stores its certificates in `~/.admindb/` (or `/etc/admindb-client/` if run as root), which can be overridden via the `--cert-dir` flag.
 
 ### 1. Registering an Identity
 
@@ -132,10 +132,10 @@ Generate a private key, send a CSR to the HTTP server, and save the returned cer
 
 ```bash
 # Register a computer (Validates IP against reverse DNS hostname)
-python client.py register --type computer --cn my-device.local
+dbcli register --type computer --cn my-device.local
 
 # Register a user (Requires command to be executed from localhost on the server)
-python client.py register --type user --cn admin_john
+dbcli register --type user --cn admin_john
 ```
 
 ### 2. Storing Data (PUT)
@@ -143,23 +143,23 @@ python client.py register --type user --cn admin_john
 Requires a valid `client.crt` and `client.key` generated from the `register` command.
 
 ```bash
-python client.py put my_test_key "This is my secret data"
+dbcli put my_test_key "This is my secret data"
 ```
 
 ### 3. Retrieving Data (GET)
 
 ```bash
-python client.py get my_test_key
+dbcli get my_test_key
 ```
 
 ### 4. Searching and Deleting
 
 ```bash
 # Fetch values for all keys ending in "_key"
-python client.py search '*_key'
+dbcli search '*_key'
 
 # Delete a specific key
-python client.py delete my_test_key
+dbcli delete my_test_key
 ```
 
 ### 5. Unregistering (Revocation)
@@ -167,7 +167,7 @@ python client.py delete my_test_key
 Revokes the current certificate on the server by adding it to a Redis blocklist, then deletes the local keypair and certificate files.
 
 ```bash
-python client.py unregister
+dbcli unregister
 ```
 
 ## Troubleshooting
