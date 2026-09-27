@@ -6,18 +6,21 @@ import argparse
 import sys
 import requests
 import json
+import configparser
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 
-def generate_csr(cn_name):
+def generate_csr(cn_name, reg_type):
     """Generates a private key and Certificate Signing Request (CSR) for the client."""
-    print(f"Generating Private Key and CSR for Common Name: {cn_name}...")
+    print(f"Generating Private Key and CSR for {reg_type.capitalize()}: {cn_name}...")
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
+    # Embed both the Common Name and the Registration Type (as Organizational Unit)
     csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, str(cn_name)),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, str(reg_type).capitalize()),
     ])).sign(key, hashes.SHA256())
 
     key_pem = key.private_bytes(
@@ -31,11 +34,11 @@ def generate_csr(cn_name):
 
 def handle_register(args):
     """Sends CSR to the HTTP server to acquire a valid signed certificate."""
-    key_pem, csr_pem = generate_csr(args.cn)
+    key_pem, csr_pem = generate_csr(args.cn, args.type)
 
     try:
-        print(f"Sending CSR to {args.http_server}/register...")
-        response = requests.post(f"{args.http_server}/register", data=csr_pem)
+        print(f"Sending CSR to {args.http_server}/register?type={args.type}...")
+        response = requests.post(f"{args.http_server}/register", params={"type": args.type}, data=csr_pem)
 
         if response.status_code == 200:
             data = response.json()
@@ -80,6 +83,7 @@ def handle_unregister(args):
             print(f"Failed to unregister: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"Error during unregistration: {e}")
+
 
 def handle_put(args):
     """Puts data to the server via mTLS."""
@@ -184,9 +188,16 @@ def main():
     else:
         default_cert_dir = os.path.expanduser('~/.admindb')
 
-    parser = argparse.ArgumentParser(description="Secure API Client using mTLS")
-    parser.add_argument('--http-server', default='http://localhost:8080', help="HTTP CA server URL")
-    parser.add_argument('--https-server', default='https://localhost:8443', help="HTTPS Secure API server URL")
+    # Load default server addresses from configuration files (User config overrides Global config)
+    config = configparser.ConfigParser()
+    config.read(['/etc/admindb-client/config', os.path.expanduser('~/.admindb/config')])
+
+    default_http = config.get('Server', 'http_server', fallback='http://localhost:8080')
+    default_https = config.get('Server', 'https_server', fallback='https://localhost:8443')
+
+    parser = argparse.ArgumentParser(description="AdminDB Client CLI")
+    parser.add_argument('--http-server', default=default_http, help="HTTP CA server URL")
+    parser.add_argument('--https-server', default=default_https, help="HTTPS Secure API server URL")
     parser.add_argument('--cert-dir', default=default_cert_dir, help=f"Directory for storing/reading certificates (default: {default_cert_dir})")
 
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -194,6 +205,8 @@ def main():
     # Register subcommand
     parser_register = subparsers.add_parser('register', help="Register and acquire a certificate")
     parser_register.add_argument('--cn', default='localhost', help="Common Name for identity verification")
+    parser_register.add_argument('--type', choices=['user', 'computer'], default='computer', help="Type of registration: user (requires localhost) or computer")
+
 
     # Unregister subcommand
     subparsers.add_parser('unregister', help="Revoke certificate and unregister")
