@@ -16,6 +16,16 @@ The system is split into two primary network interfaces and a background worker:
 
 ## Installation
 
+### With Package Managers
+You can download pre-packages installers here:  
+- (Debian Server)[https://jepebu.com/downloads/admindb_1.0.0_all.deb]
+- (Debian Client)[https://jepebu.com/downloads/admindb-client_1.0.0_all.deb]
+- (Fedora Server)[https://jepebu.com/downloads/admindb-1.0.0-1.noarch.rpm]
+- (Fedora Client)[https://jepebu.com/downloads/admindb-client-1.0.0-1.noarch.rpm]
+
+
+
+### Building From Source
 1. Clone or copy the project files (`server.py` and `client.py`) into your environment.
 2. Install the required Python packages:
 
