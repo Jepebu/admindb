@@ -21,12 +21,6 @@ The system is split into two primary network interfaces and a background worker:
 
 ### With Package Managers
 
-64191a3ee282bcc966c09eccbf730e71b4ff28a115ab1eaffdc0f24f414d1c09  pkg/admindb-client-1.0.0-1.noarch.rpm
-7198d39cca5fff3352e7328113e7c18ff9f9e049093bb26d73f5134c3cb189d5  pkg/admindb-client_1.0.0_all.deb
-8a36a06e2bd34355273d85c9bed555044a7ffe86387517799730b56b07c7986c  pkg/admindb-server-1.0.0-1.noarch.rpm
-b300633f7c8694f938f399e5aa3a6299d907f79d76b52e0a7de0a4a4b07cac30  pkg/admindb-server_1.0.0_all.deb
-
-
 You can download pre-packages installers here:  
 - [Debian Server](https://jepebu.com/downloads/admindb-server_1.0.0_all.deb) (SHA `b300633f7c8694f938f399e5aa3a6299d907f79d76b52e0a7de0a4a4b07cac30`)
 - [Debian Client](https://jepebu.com/downloads/admindb-client_1.0.0_all.deb) (SHA `7198d39cca5fff3352e7328113e7c18ff9f9e049093bb26d73f5134c3cb189d5`)
