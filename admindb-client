@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 
 import os
 import argparse
 import sys
 import requests
+import json
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography import x509
@@ -37,14 +39,18 @@ def handle_register(args):
 
         if response.status_code == 200:
             data = response.json()
+
+            # Ensure the certificate directory exists
+            os.makedirs(args.cert_dir, exist_ok=True)
+
             # Save our private key, new certificate, and the server's CA
-            with open('client.key', 'wb') as f:
+            with open(os.path.join(args.cert_dir, 'client.key'), 'wb') as f:
                 f.write(key_pem)
-            with open('client.crt', 'w') as f:
+            with open(os.path.join(args.cert_dir, 'client.crt'), 'w') as f:
                 f.write(data['certificate'])
-            with open('ca.crt', 'w') as f:
+            with open(os.path.join(args.cert_dir, 'ca.crt'), 'w') as f:
                 f.write(data['ca_certificate'])
-            print("Successfully registered! Certificates saved locally.")
+            print(f"Successfully registered! Certificates saved locally in {args.cert_dir}.")
         else:
             print(f"Registration failed: {response.status_code} - {response.text}")
     except Exception as e:
@@ -52,19 +58,23 @@ def handle_register(args):
 
 def handle_unregister(args):
     """Revokes the current certificate via the HTTPS server and deletes local copies."""
-    if not os.path.exists('client.crt') or not os.path.exists('client.key'):
-        print("No active client certificate found to unregister.")
+    crt_path = os.path.join(args.cert_dir, 'client.crt')
+    key_path = os.path.join(args.cert_dir, 'client.key')
+    ca_path = os.path.join(args.cert_dir, 'ca.crt')
+
+    if not os.path.exists(crt_path) or not os.path.exists(key_path):
+        print(f"No active client certificate found in {args.cert_dir} to unregister.")
         return
 
     try:
         response = requests.post(
             f"{args.https_server}/unregister",
-            cert=('client.crt', 'client.key'),
-            verify='ca.crt'
+            cert=(crt_path, key_path),
+            verify=ca_path
         )
         if response.status_code == 200:
-            os.remove('client.crt')
-            os.remove('client.key')
+            os.remove(crt_path)
+            os.remove(key_path)
             print("Successfully unregistered. Local certificate files destroyed.")
         else:
             print(f"Failed to unregister: {response.status_code} - {response.text}")
@@ -73,12 +83,16 @@ def handle_unregister(args):
 
 def handle_put(args):
     """Puts data to the server via mTLS."""
+    crt_path = os.path.join(args.cert_dir, 'client.crt')
+    key_path = os.path.join(args.cert_dir, 'client.key')
+    ca_path = os.path.join(args.cert_dir, 'ca.crt')
+
     try:
         response = requests.put(
             f"{args.https_server}/data/{args.key}",
             data=args.value,
-            cert=('client.crt', 'client.key'),
-            verify='ca.crt'
+            cert=(crt_path, key_path),
+            verify=ca_path
         )
         print(f"Status: {response.status_code}\nResponse: {response.text}")
     except Exception as e:
@@ -86,20 +100,94 @@ def handle_put(args):
 
 def handle_get(args):
     """Gets data from the server via mTLS."""
+    crt_path = os.path.join(args.cert_dir, 'client.crt')
+    key_path = os.path.join(args.cert_dir, 'client.key')
+    ca_path = os.path.join(args.cert_dir, 'ca.crt')
+
     try:
         response = requests.get(
             f"{args.https_server}/data/{args.key}",
-            cert=('client.crt', 'client.key'),
-            verify='ca.crt'
+            cert=(crt_path, key_path),
+            verify=ca_path
         )
-        print(f"Status: {response.status_code}\nResponse: {response.text}")
+        if args.output in ['s','standard']:
+            print(f"Status: {response.status_code}\nResponse: {response.text}")
+
+        elif args.output in ['j','json']:
+            json_output = response.json()
+            json_output['status_code'] = response.status_code
+            print(json.dumps(json_output))
+
+        elif args.output in ['h','human-readable']:
+            json_output = response.json()
+            print(json_output['value'])
+
+        else:
+            print(f"Unsupported output type: {args.output}")
+
     except Exception as e:
         print(f"Error during GET request: {e}")
 
+def handle_delete(args):
+    """Deletes data from the server via mTLS."""
+    crt_path = os.path.join(args.cert_dir, 'client.crt')
+    key_path = os.path.join(args.cert_dir, 'client.key')
+    ca_path = os.path.join(args.cert_dir, 'ca.crt')
+
+    try:
+        response = requests.delete(
+            f"{args.https_server}/data/{args.key}",
+            cert=(crt_path, key_path),
+            verify=ca_path
+        )
+        print(f"Status: {response.status_code}\nResponse: {response.text}")
+    except Exception as e:
+        print(f"Error during DELETE request: {e}")
+
+def handle_search(args):
+    """Searches for keys on the server utilizing shell-style matching."""
+    crt_path = os.path.join(args.cert_dir, 'client.crt')
+    key_path = os.path.join(args.cert_dir, 'client.key')
+    ca_path = os.path.join(args.cert_dir, 'ca.crt')
+
+    try:
+        # Pass the search pattern using query parameters ?q=...
+        response = requests.get(
+            f"{args.https_server}/search",
+            params={'q': args.pattern},
+            cert=(crt_path, key_path),
+            verify=ca_path
+        )
+        if args.output in ['s','standard']:
+            print(f"Status: {response.status_code}\nResponse: {response.text}")
+
+        elif args.output in ['j','json']:
+            json_output = response.json()
+            json_output['status_code'] = response.status_code
+            print(json.dumps(json_output))
+
+        elif args.output in ['h','human-readable']:
+            result_dict = response.json()['results']
+            for k,v in result_dict.items():
+                print(f"{k} - {v}")
+
+        else:
+            print(f"Unsupported output type: {args.output}")
+
+    except Exception as e:
+        print(f"Error during SEARCH request: {e}")
+
 def main():
+    # Determine the default certificate directory based on the user
+    if hasattr(os, 'geteuid') and os.geteuid() == 0:
+        default_cert_dir = '/etc/admindb-client'
+    else:
+        default_cert_dir = os.path.expanduser('~/.admindb')
+
     parser = argparse.ArgumentParser(description="Secure API Client using mTLS")
     parser.add_argument('--http-server', default='http://localhost:8080', help="HTTP CA server URL")
     parser.add_argument('--https-server', default='https://localhost:8443', help="HTTPS Secure API server URL")
+    parser.add_argument('--cert-dir', default=default_cert_dir, help=f"Directory for storing/reading certificates (default: {default_cert_dir})")
 
     subparsers = parser.add_subparsers(dest='command', required=True)
 
@@ -118,6 +206,16 @@ def main():
     # Get subcommand
     parser_get = subparsers.add_parser('get', help="Retrieve a value from the server")
     parser_get.add_argument('key', help="Key for the data")
+    parser_get.add_argument('-o','--output', default='standard', help="Determines text output format", choices=['s','standard','j','json','h','human-readable'])
+
+    # Delete subcommand
+    parser_delete = subparsers.add_parser('delete', help="Delete a value from the server")
+    parser_delete.add_argument('key', help="Key to delete")
+
+    # Search subcommand
+    parser_search = subparsers.add_parser('search', help="Search for keys using shell-style matching")
+    parser_search.add_argument('pattern', help="Search pattern (e.g., '*key')")
+    parser_search.add_argument('-o','--output', default='standard', help="Determines text output format", choices=['s','standard','j','json','h','human-readable'])
 
     args = parser.parse_args()
 
@@ -135,6 +233,10 @@ def main():
         handle_put(args)
     elif args.command == 'get':
         handle_get(args)
+    elif args.command == 'delete':
+        handle_delete(args)
+    elif args.command == 'search':
+        handle_search(args)
 
 if __name__ == '__main__':
     main()
