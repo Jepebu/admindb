@@ -1,0 +1,5 @@
+*.rpm
+*.deb
+build.sh
+pkg/
+package_build/

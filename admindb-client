@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+
+import os
+import argparse
+import sys
+import requests
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+
+def generate_csr(cn_name):
+    """Generates a private key and Certificate Signing Request (CSR) for the client."""
+    print(f"Generating Private Key and CSR for Common Name: {cn_name}...")
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, str(cn_name)),
+    ])).sign(key, hashes.SHA256())
+
+    key_pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    csr_pem = csr.public_bytes(serialization.Encoding.PEM)
+
+    return key_pem, csr_pem
+
+def handle_register(args):
+    """Sends CSR to the HTTP server to acquire a valid signed certificate."""
+    key_pem, csr_pem = generate_csr(args.cn)
+
+    try:
+        print(f"Sending CSR to {args.http_server}/register...")
+        response = requests.post(f"{args.http_server}/register", data=csr_pem)
+
+        if response.status_code == 200:
+            data = response.json()
+            # Save our private key, new certificate, and the server's CA
+            with open('client.key', 'wb') as f:
+                f.write(key_pem)
+            with open('client.crt', 'w') as f:
+                f.write(data['certificate'])
+            with open('ca.crt', 'w') as f:
+                f.write(data['ca_certificate'])
+            print("Successfully registered! Certificates saved locally.")
+        else:
+            print(f"Registration failed: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Error connecting to server: {e}")
+
+def handle_unregister(args):
+    """Revokes the current certificate via the HTTPS server and deletes local copies."""
+    if not os.path.exists('client.crt') or not os.path.exists('client.key'):
+        print("No active client certificate found to unregister.")
+        return
+
+    try:
+        response = requests.post(
+            f"{args.https_server}/unregister",
+            cert=('client.crt', 'client.key'),
+            verify='ca.crt'
+        )
+        if response.status_code == 200:
+            os.remove('client.crt')
+            os.remove('client.key')
+            print("Successfully unregistered. Local certificate files destroyed.")
+        else:
+            print(f"Failed to unregister: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Error during unregistration: {e}")
+
+def handle_put(args):
+    """Puts data to the server via mTLS."""
+    try:
+        response = requests.put(
+            f"{args.https_server}/data/{args.key}",
+            data=args.value,
+            cert=('client.crt', 'client.key'),
+            verify='ca.crt'
+        )
+        print(f"Status: {response.status_code}\nResponse: {response.text}")
+    except Exception as e:
+        print(f"Error during PUT request: {e}")
+
+def handle_get(args):
+    """Gets data from the server via mTLS."""
+    try:
+        response = requests.get(
+            f"{args.https_server}/data/{args.key}",
+            cert=('client.crt', 'client.key'),
+            verify='ca.crt'
+        )
+        print(f"Status: {response.status_code}\nResponse: {response.text}")
+    except Exception as e:
+        print(f"Error during GET request: {e}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Secure API Client using mTLS")
+    parser.add_argument('--http-server', default='http://localhost:8080', help="HTTP CA server URL")
+    parser.add_argument('--https-server', default='https://localhost:8443', help="HTTPS Secure API server URL")
+
+    subparsers = parser.add_subparsers(dest='command', required=True)
+
+    # Register subcommand
+    parser_register = subparsers.add_parser('register', help="Register and acquire a certificate")
+    parser_register.add_argument('--cn', default='localhost', help="Common Name for identity verification")
+
+    # Unregister subcommand
+    subparsers.add_parser('unregister', help="Revoke certificate and unregister")
+
+    # Put subcommand
+    parser_put = subparsers.add_parser('put', help="Store a value on the server")
+    parser_put.add_argument('key', help="Key for the data")
+    parser_put.add_argument('value', help="Value to store")
+
+    # Get subcommand
+    parser_get = subparsers.add_parser('get', help="Retrieve a value from the server")
+    parser_get.add_argument('key', help="Key for the data")
+
+    args = parser.parse_args()
+
+    # Automatically format URLs to ensure they contain the required scheme
+    if not args.http_server.startswith('http'):
+        args.http_server = f"http://{args.http_server}"
+    if not args.https_server.startswith('http'):
+        args.https_server = f"https://{args.https_server}"
+
+    if args.command == 'register':
+        handle_register(args)
+    elif args.command == 'unregister':
+        handle_unregister(args)
+    elif args.command == 'put':
+        handle_put(args)
+    elif args.command == 'get':
+        handle_get(args)
+
+if __name__ == '__main__':
+    main()
