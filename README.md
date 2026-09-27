@@ -18,10 +18,10 @@ The system is split into two primary network interfaces and a background worker:
 
 ### With Package Managers
 You can download pre-packages installers here:  
-- [Debian Server](https://jepebu.com/downloads/admindb_1.0.0_all.deb)
-- [Debian Client](https://jepebu.com/downloads/admindb-client_1.0.0_all.deb)
-- [Fedora Server](https://jepebu.com/downloads/admindb-1.0.0-1.noarch.rpm)
-- [Fedora Client](https://jepebu.com/downloads/admindb-client-1.0.0-1.noarch.rpm)
+- [Debian Server](https://jepebu.com/downloads/admindb-server_1.0.0_all.deb) (SHA `81a1526b48c134140a8eb6865771af9ca81ceca44832b28ca7e33a8b641e4a49`)
+- [Debian Client](https://jepebu.com/downloads/admindb-client_1.0.0_all.deb) (SHA `034b7183e10ad783689f3e64a62a2b43ae40b63f397616b3236882f9d2a2b850`)
+- [Fedora Server](https://jepebu.com/downloads/admindb-server-1.0.0-1.noarch.rpm) (SHA `5edcca0e6ef90e2d27cdebd27ed6dec01c6934b3d9f6d15afba9bc4639cd05c2`)
+- [Fedora Client](https://jepebu.com/downloads/admindb-client-1.0.0-1.noarch.rpm) (SHA `f86d293acf8af337204a51a2dfa35925d88ed0a3ba55f848038f367f2f689b5c`)
 
 
 
